@@ -3,6 +3,10 @@ let objet3D2;
 let textureImage1;
 let textureImage2;
 
+// Variables pour la rotation
+let angleY = 0;
+let autoRotate = false;
+
 function preload() {
   objet3D = loadModel('aviontest1.obj', true);
   objet3D2 = loadModel('aviontest2.obj', true);
@@ -13,6 +17,13 @@ function preload() {
 function setup() {
   createCanvas(windowWidth, windowHeight, WEBGL);
   noStroke();
+  
+  // --- Création du bouton ---
+  let btn = createButton("Lancer/Stop rotation X");
+  btn.position(10, 10); // position en pixels depuis le coin supérieur gauche
+  btn.mousePressed(() => {
+    autoRotate = !autoRotate; // on inverse l'état
+  });
 }
 
 function draw() {
@@ -26,16 +37,21 @@ function draw() {
   let dx = map(mouseX, 0, width, -5, 5);
   let dy = map(mouseY, 0, height, -5, 5);
   let dz = -1;
-  // Direction de la lumière selon la souris
   let dx2 = map(mouseX, 0, width, -5, 5);
   let dy2 = map(mouseY, 0, height, -5, 5);
   let dz2 = 1;
 
-  // Position fixe pour la scène
-  rotateX(-250);
-  rotateY(20.5);
+  // --- Rotation automatique sur X ---
+  if (autoRotate) {
+    angleY += 0.005; // ajuste la vitesse si besoin
+  }
 
-  // Objet 1 (avec texture et lumière)
+  // Applique la rotation sur X, en plus de la rotation initiale
+  rotateX(-250 +angleY);
+  rotateY(29.8);
+
+
+  // Objet 1
   push();
   directionalLight(255, 255, 255, dx2, dy2, dz2);
   texture(textureImage1);
@@ -44,7 +60,7 @@ function draw() {
   model(objet3D);
   pop();
 
-  // Objet 2 (même lumière appliquée ici aussi)
+  // Objet 2
   push();
   directionalLight(255, 255, 255, dx, dy, dz);
   texture(textureImage2);
@@ -52,3 +68,5 @@ function draw() {
   model(objet3D2);
   pop();
 }
+
+
