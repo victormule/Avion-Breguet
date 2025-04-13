@@ -3,6 +3,7 @@ import * as THREE from 'three'; // Le cœur de Three.js : scènes, caméras, lum
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'; // Permet de faire tourner/zoomer la caméra avec la souris
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'; // Charge les fichiers .glb / .gltf (modèles 3D)
 
+
 // Création de la scène 3D
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xdddddd); // Couleur de fond gris clair
@@ -56,18 +57,53 @@ backgroundSlider.addEventListener('input', () => {
 // Chargement d'un modèle 3D au format GLB (GLTF binaire)
 const loader = new GLTFLoader();
 loader.load(
-  'models/avion test.glb', // Chemin vers le modèle
+  'models/avion test.glb',
   (gltf) => {
-    scene.add(gltf.scene); // Une fois chargé, on ajoute le modèle à la scène
+    model3D = gltf.scene;
+
+    // Sauvegarder les matériaux d'origine
+    model3D.traverse((child) => {
+      if (child.isMesh) {
+        originalMaterials.push({ mesh: child, material: child.material });
+      }
+    });
+
+    scene.add(model3D);
   },
-  undefined, // Fonction optionnelle de progression
+  undefined,
   (error) => {
-    console.error('Erreur de chargement :', error); // En cas d'erreur, on affiche un message
+    console.error('Erreur de chargement :', error);
   }
 );
 
+let originalMaterials = []; // Pour sauvegarder les matériaux d'origine
+let isTextured = true;      // État courant
+let model3D = null;         // Pour garder une référence sur le modèle chargé
+
 // Vecteur pour stocker la position de la souris
 const mouse = new THREE.Vector2();
+
+const toggleBtn = document.getElementById('toggleTexture');
+toggleBtn.addEventListener('click', () => {
+  if (!model3D) return;
+
+  isTextured = !isTextured;
+
+  model3D.traverse((child) => {
+    if (child.isMesh) {
+      if (isTextured) {
+        // Remettre le matériau d'origine
+        const original = originalMaterials.find(o => o.mesh === child);
+        if (original) child.material = original.material;
+      } else {
+        // Remplacer par un matériau basique gris
+        child.material = new THREE.MeshStandardMaterial({
+          color: 0x888888,
+          flatShading: true // Optionnel, ça donne un effet low-poly sympa
+      })}
+    }
+  });
+});
 
 // Événement de mouvement de souris
 window.addEventListener('mousemove', (event) => {
