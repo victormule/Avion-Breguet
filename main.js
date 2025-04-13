@@ -1,149 +1,327 @@
-// Importation des modules depuis Three.js
-import * as THREE from 'three'; // Le cœur de Three.js : scènes, caméras, lumières, objets...
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'; // Permet de faire tourner/zoomer la caméra avec la souris
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'; // Charge les fichiers .glb / .gltf (modèles 3D)
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
-
-// Création de la scène 3D
+// Initialisation de la scène
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xdddddd); // Couleur de fond gris clair
+scene.background = new THREE.Color(0xdddddd);
 
-// Création d'une caméra perspective
-const camera = new THREE.PerspectiveCamera(
-  75, // Champ de vision (FOV)
-  window.innerWidth / window.innerHeight, // Ratio de l'écran
-  0.1, // Distance minimale visible
-  1000 // Distance maximale visible
-);
-camera.position.set(0, 2, 5); // Position initiale de la caméra (x, y, z)
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 2, 5);
 
-// Création du moteur de rendu WebGL
-const renderer = new THREE.WebGLRenderer({ antialias: true }); // Antialias = bords lissés
-renderer.setSize(window.innerWidth, window.innerHeight); // Taille du rendu = taille de la fenêtre
-document.body.appendChild(renderer.domElement); // Ajout du canvas au document HTML
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-// Ajout d'une lumière ambiante (éclaire tout uniformément, sans direction)
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Couleur blanche, intensité faible
+// Lumières
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
 scene.add(ambientLight);
 
-// Création d'une lumière directionnelle (comme le soleil, éclaire dans une direction)
-const followLight = new THREE.DirectionalLight(0xffffff, 2); // Lumière blanche, intensité forte
+const followLight = new THREE.DirectionalLight(0xffffff, 2);
 scene.add(followLight);
 
-// Objet cible que la lumière va "viser" (il faut le placer dans la scène)
-const lightTarget = new THREE.Object3D(); // Objet vide servant de point de visée
+const lightTarget = new THREE.Object3D();
 scene.add(lightTarget);
-followLight.target = lightTarget; // On dit à la lumière de viser cet objet
+followLight.target = lightTarget;
 
-// Ajout des contrôles de la caméra avec la souris (rotation, zoom, déplacement)
+// Contrôles
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true; // Rend les mouvements plus fluides
+controls.enableDamping = true;
 
-// Slider pour ajuster l'intensité de la lumière
+// Sélection des éléments UI
 const intensitySlider = document.getElementById('lightIntensity');
-intensitySlider.addEventListener('input', () => {
-  followLight.intensity = parseFloat(intensitySlider.value);
-});
-
-// Slider pour ajuster la couleur de fond (de blanc à noir)
 const backgroundSlider = document.getElementById('backgroundSlider');
-backgroundSlider.addEventListener('input', () => {
-  const value = parseFloat(backgroundSlider.value);
-  // On interpole entre blanc (1,1,1) et noir (0,0,0)
-  const color = new THREE.Color(value, value, value);
-  scene.background = color;
-});
+const toggleBtn = document.getElementById('toggleTexture');
+const toggleAnnotationsBtn = document.getElementById('toggleAnnotations');
+const exportAnnotationsBtn = document.getElementById('exportAnnotations');
 
-// Chargement d'un modèle 3D au format GLB (GLTF binaire)
+// Variables globales
+let model3D = null;
+let isTextured = true;
+let annotationsVisible = true;
+const originalMaterials = [];
+const annotations = [];
+const mouse = new THREE.Vector2();
+
+// GLTF Loader
 const loader = new GLTFLoader();
 loader.load(
   'models/avion test.glb',
   (gltf) => {
     model3D = gltf.scene;
-
-    // Sauvegarder les matériaux d'origine
     model3D.traverse((child) => {
       if (child.isMesh) {
         originalMaterials.push({ mesh: child, material: child.material });
       }
     });
-
     scene.add(model3D);
+    loadAnnotationsFromLocalStorage();
   },
   undefined,
-  (error) => {
-    console.error('Erreur de chargement :', error);
-  }
+  (error) => console.error('Erreur de chargement :', error)
 );
 
-let originalMaterials = []; // Pour sauvegarder les matériaux d'origine
-let isTextured = true;      // État courant
-let model3D = null;         // Pour garder une référence sur le modèle chargé
+// Gestion sliders
+intensitySlider.addEventListener('input', () => {
+  followLight.intensity = parseFloat(intensitySlider.value);
+});
 
-// Vecteur pour stocker la position de la souris
-const mouse = new THREE.Vector2();
+backgroundSlider.addEventListener('input', () => {
+  const val = parseFloat(backgroundSlider.value);
+  scene.background = new THREE.Color(val, val, val);
+});
 
-const toggleBtn = document.getElementById('toggleTexture');
+// Bascule texture
 toggleBtn.addEventListener('click', () => {
   if (!model3D) return;
-
   isTextured = !isTextured;
-
   model3D.traverse((child) => {
     if (child.isMesh) {
       if (isTextured) {
-        // Remettre le matériau d'origine
         const original = originalMaterials.find(o => o.mesh === child);
         if (original) child.material = original.material;
       } else {
-        // Remplacer par un matériau basique gris
-        child.material = new THREE.MeshStandardMaterial({
-          color: 0x888888,
-          flatShading: true // Optionnel, ça donne un effet low-poly sympa
-      })}
+        child.material = new THREE.MeshStandardMaterial({ color: 0x888888, flatShading: true });
+      }
     }
   });
 });
 
-// Événement de mouvement de souris
+// Bascule annotations
+toggleAnnotationsBtn.addEventListener('click', () => {
+  annotationsVisible = !annotationsVisible;
+  toggleAnnotationsBtn.textContent = annotationsVisible ? 'Masquer les annotations' : 'Afficher les annotations';
+  updateAnnotationVisibility();
+});
+
+function updateAnnotationVisibility() {
+  annotations.forEach(a => a.mesh.visible = annotationsVisible);
+}
+
+// Export JSON
+exportAnnotationsBtn.addEventListener('click', () => {
+  const data = annotations.map(a => ({
+    text: a.text,
+    position: a.position
+  }));
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'annotations.json';
+  a.click();
+
+  URL.revokeObjectURL(url);
+});
+
+// Import JSON des annotations
+const importInput = document.getElementById('importAnnotations');
+
+importInput.addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const json = e.target.result;
+    try {
+      const data = JSON.parse(json);
+
+      // Supprime les annotations actuelles
+      annotations.forEach(a => scene.remove(a.mesh));
+      annotations.length = 0;
+
+      // Ajoute celles du fichier
+      data.forEach(({ text, position }) => {
+        const pos = new THREE.Vector3(position.x, position.y, position.z);
+        const sphere = new THREE.Mesh(
+          new THREE.SphereGeometry(0.03, 16, 16),
+          new THREE.MeshStandardMaterial({ color: 0xff0000 })
+        );
+        sphere.position.copy(pos);
+        scene.add(sphere);
+        annotations.push({ mesh: sphere, text, position: pos });
+      });
+
+      saveAnnotationsToLocalStorage(); // Met à jour le stockage local
+      updateAnnotationVisibility();    // Respecte l’état visible/masqué
+
+    } catch (err) {
+      alert('Fichier invalide : ' + err.message);
+    }
+  };
+
+  reader.readAsText(file);
+});
+
+// Suivi souris
 window.addEventListener('mousemove', (event) => {
-  // Conversion des coordonnées pixel en coordonnées normalisées (-1 à +1)
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 });
 
-// Fonction d'animation appelée à chaque frame (~60 fois par seconde)
-function animate() {
-  requestAnimationFrame(animate); // Boucle infinie
-  controls.update(); // Mise à jour des contrôles de caméra
-
-  // Création d'un rayon depuis la souris vers la scène
+// Clic droit pour annotation
+window.addEventListener('contextmenu', (event) => {
+  event.preventDefault();
   const raycaster = new THREE.Raycaster();
-  raycaster.setFromCamera(mouse, camera); // Rayon depuis la position de la souris à partir de la caméra
+  raycaster.setFromCamera(mouse, camera);
+  if (model3D) {
+    const intersects = raycaster.intersectObject(model3D, true);
+    if (intersects.length > 0) {
+      addAnnotation(intersects[0].point, event.clientX, event.clientY);
+    }
+  }
+});
 
-  // Point situé à 10 unités dans la direction pointée par la souris
-  const targetPos = raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(10));
+// Clic gauche pour voir/modifier/supprimer une annotation
+window.addEventListener('click', (event) => {
+  if (!annotationsVisible) return;
 
-  // On veut que la lumière reste à 5 unités devant la caméra (dans sa direction)
-  const lightOffset = 5;
-  const cameraDir = new THREE.Vector3(); // Direction vers laquelle la caméra regarde
-  camera.getWorldDirection(cameraDir); // Stocke la direction de la caméra dans cameraDir
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
+  const clicked = raycaster.intersectObjects(annotations.map(a => a.mesh));
+  if (clicked.length > 0) {
+    const clickedMesh = clicked[0].object;
+    const annotation = annotations.find(a => a.mesh === clickedMesh);
+    if (annotation) {
+      showAnnotationPopup(annotation.text, event.clientX, event.clientY, annotation);
+    }
+  }
+});
 
-  // Place la lumière à 5 unités devant la caméra
-  followLight.position.copy(camera.position).add(cameraDir.clone().multiplyScalar(lightOffset));
+// Animation loop
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
 
-  // Déplace la cible de la lumière vers l'endroit pointé par la souris
-  lightTarget.position.copy(targetPos);
-  followLight.target.updateMatrixWorld(); // Obligatoire pour que le changement soit pris en compte
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
+  const point = raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(10));
+  const camDir = new THREE.Vector3();
+  camera.getWorldDirection(camDir);
 
-  // Rendu de la scène avec la caméra
+  followLight.position.copy(camera.position).add(camDir.multiplyScalar(5));
+  lightTarget.position.copy(point);
+  followLight.target.updateMatrixWorld();
+
   renderer.render(scene, camera);
 }
-animate(); // Démarre la boucle d'animation
+animate();
 
-// Si la fenêtre est redimensionnée, on ajuste la caméra et le rendu
+// Ajouter une annotation
+function addAnnotation(position, screenX, screenY) {
+  const sphere = new THREE.Mesh(
+    new THREE.SphereGeometry(0.03, 16, 16),
+    new THREE.MeshStandardMaterial({ color: 0xff0000 })
+  );
+  sphere.position.copy(position);
+  scene.add(sphere);
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Annotation...';
+  Object.assign(input.style, {
+    position: 'absolute',
+    left: `${screenX}px`,
+    top: `${screenY}px`,
+    zIndex: 20,
+    padding: '4px',
+    border: '1px solid #ccc',
+    background: 'white'
+  });
+  document.body.appendChild(input);
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const text = input.value;
+      input.remove();
+      annotations.push({ mesh: sphere, text, position });
+      saveAnnotationsToLocalStorage();
+    }
+  });
+}
+
+// Affiche, modifie ou supprime une annotation
+function showAnnotationPopup(text, x, y, annotationObj = null) {
+  document.querySelectorAll('.annotation-popup').forEach(el => el.remove());
+
+  const container = document.createElement('div');
+  container.className = 'annotation-popup';
+  Object.assign(container.style, {
+    position: 'absolute',
+    left: `${x}px`,
+    top: `${y}px`,
+    background: 'white',
+    padding: '6px 10px',
+    border: '1px solid #444',
+    borderRadius: '4px',
+    zIndex: 30,
+    pointerEvents: 'auto'
+  });
+
+  const p = document.createElement('p');
+  p.textContent = text;
+  p.style.margin = '0 0 5px';
+  container.appendChild(p);
+
+  const editBtn = document.createElement('button');
+  editBtn.textContent = '✏️';
+  editBtn.style.marginRight = '4px';
+  editBtn.addEventListener('click', () => {
+    const newText = prompt('Modifier l’annotation :', text);
+    if (newText !== null && annotationObj) {
+      annotationObj.text = newText;
+      saveAnnotationsToLocalStorage();
+      container.remove();
+    }
+  });
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.textContent = '🗑️';
+  deleteBtn.addEventListener('click', () => {
+    if (annotationObj) {
+      scene.remove(annotationObj.mesh);
+      const index = annotations.indexOf(annotationObj);
+      if (index !== -1) annotations.splice(index, 1);
+      saveAnnotationsToLocalStorage();
+      container.remove();
+    }
+  });
+
+  container.appendChild(editBtn);
+  container.appendChild(deleteBtn);
+
+  document.body.appendChild(container);
+  setTimeout(() => container.remove(), 5000);
+}
+
+// Enregistrement dans localStorage
+function saveAnnotationsToLocalStorage() {
+  const data = annotations.map(a => ({ text: a.text, position: a.position }));
+  localStorage.setItem('annotations', JSON.stringify(data));
+}
+
+// Chargement depuis localStorage
+function loadAnnotationsFromLocalStorage() {
+  const data = JSON.parse(localStorage.getItem('annotations') || '[]');
+  data.forEach(({ text, position }) => {
+    const pos = new THREE.Vector3(position.x, position.y, position.z);
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(0.03, 16, 16),
+      new THREE.MeshStandardMaterial({ color: 0xff0000 })
+    );
+    sphere.position.copy(pos);
+    scene.add(sphere);
+    annotations.push({ mesh: sphere, text, position: pos });
+  });
+  updateAnnotationVisibility();
+}
+
+// Resize
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight; // Met à jour le ratio
-  camera.updateProjectionMatrix(); // Recalcule la matrice de projection
-  renderer.setSize(window.innerWidth, window.innerHeight); // Redimensionne le rendu
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });
