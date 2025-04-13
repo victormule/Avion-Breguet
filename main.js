@@ -245,30 +245,62 @@ function addAnnotation(position, screenX, screenY) {
 
 // Affiche, modifie ou supprime une annotation
 function showAnnotationPopup(text, x, y, annotationObj = null) {
+  // Supprime les anciennes popups
   document.querySelectorAll('.annotation-popup').forEach(el => el.remove());
 
+  // Créer le conteneur de la popup
   const container = document.createElement('div');
   container.className = 'annotation-popup';
   Object.assign(container.style, {
     position: 'absolute',
     left: `${x}px`,
     top: `${y}px`,
-    background: 'white',
-    padding: '6px 10px',
+    background: 'rgba(255, 255, 255, 0.9)', // Légèrement translucide
+    padding: '10px 10px 10px 10px',
     border: '1px solid #444',
-    borderRadius: '4px',
+    borderRadius: '8px',
     zIndex: 30,
-    pointerEvents: 'auto'
+    maxWidth: '300px', // Si le texte dépasse, il se retourne à la ligne
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.2)',
+    pointerEvents: 'auto',
+    fontFamily: 'Arial, sans-serif',
+    fontSize: '14px',
+    color: '#333'
   });
 
-  const p = document.createElement('p');
-  p.textContent = text;
-  p.style.margin = '0 0 5px';
-  container.appendChild(p);
+  // Bouton de fermeture (croix)
+  const closeBtn = document.createElement('span');
+  closeBtn.textContent = '✖';
+  Object.assign(closeBtn.style, {
+    position: 'absolute',
+    top: '4px',
+    right: '6px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    fontSize: '16px',
+    color: '#888'
+  });
+  closeBtn.addEventListener('click', () => {
+    container.remove();
+  });
+  container.appendChild(closeBtn);
 
+  // Contenu texte avec marges pour ne pas être recouvert par la croix
+  const textParagraph = document.createElement('p');
+  textParagraph.textContent = text;
+  Object.assign(textParagraph.style, {
+    margin: '20px 0 5px 0',
+    wordWrap: 'break-word'
+  });
+  container.appendChild(textParagraph);
+
+  // Bouton de modification
   const editBtn = document.createElement('button');
   editBtn.textContent = '✏️';
-  editBtn.style.marginRight = '4px';
+  Object.assign(editBtn.style, {
+    marginRight: '4px',
+    cursor: 'pointer'
+  });
   editBtn.addEventListener('click', () => {
     const newText = prompt('Modifier l’annotation :', text);
     if (newText !== null && annotationObj) {
@@ -277,9 +309,14 @@ function showAnnotationPopup(text, x, y, annotationObj = null) {
       container.remove();
     }
   });
+  container.appendChild(editBtn);
 
+  // Bouton de suppression
   const deleteBtn = document.createElement('button');
   deleteBtn.textContent = '🗑️';
+  Object.assign(deleteBtn.style, {
+    cursor: 'pointer'
+  });
   deleteBtn.addEventListener('click', () => {
     if (annotationObj) {
       scene.remove(annotationObj.mesh);
@@ -289,13 +326,23 @@ function showAnnotationPopup(text, x, y, annotationObj = null) {
       container.remove();
     }
   });
-
-  container.appendChild(editBtn);
   container.appendChild(deleteBtn);
 
+  // Ajouter la popup dans le document
   document.body.appendChild(container);
-  setTimeout(() => container.remove(), 5000);
+
+  // Fermer en cliquant ailleurs (hors de la popup)
+  const outsideClick = (e) => {
+    if (!container.contains(e.target)) {
+      container.remove();
+      document.removeEventListener('click', outsideClick);
+    }
+  };
+  // Attendre un court instant pour éviter la fermeture immédiate sur le clic initial
+  setTimeout(() => document.addEventListener('click', outsideClick), 50);
 }
+
+
 
 // Enregistrement dans localStorage
 function saveAnnotationsToLocalStorage() {
